@@ -9,15 +9,20 @@
 //save to bring up a clearer dialogue
 
 let theVolume = -24;
-let seqSteps = 8;
+let numberOfPlayers = 8;
 let seqRows = 8;
 let seqRowIncrement; // defined in setup
 let seqRowPosition; // defined in setup
 let radius; // radius of the buttons for looper and save button
 
-let seqObject = {};
+let seqObject = {}; // object to store the places for each button in
+let seqSaveSteps = {}; // object to store the sequence state in - this is both where the current sequence is, but also can be exported as a JSON file and sent to a server if I like
 for(let i = 0; i < seqRows; i++){
-  seqObject[`row${i}`] = new Array ();
+  seqObject[`row${i}`] = new Array (); // to store the button positions in
+  seqSaveSteps[`row${i}`] = new Array (); // to store the sequence state in
+  for(let j = 0; j < numberOfPlayers; j++){
+    seqSaveSteps[`row${i}`].push(0); // initialise the array to make all steps "off"
+  }
 }
 
 let soundOn = false; // have we instigated Tone.start() yet? (needed to allow sound)
@@ -27,17 +32,10 @@ let seqOn, seqOff, seqStep1, seqStep2, sky; // to store images in
 let seqWidth;
 let seqHeight;
 
-let one = 'gardenLoop1';
-let two = 'gardenLoop2';
-let three = 'gardenLoop3';
-let four = 'gardenLoop4';
-let five = 'gardenLoop5';
-let six = 'gardenLoop6';
-
 let stepName = new Array;
 
 for(let i = 0; i < seqRows; i++){
-  stepName[i] = `gardenStep${i}`;
+  stepName[i] = `number${i}`;
 }
 
 let seqPlayers = new Array;
@@ -48,28 +46,22 @@ for(let i = 0; i < seqRows; i++){
 
 let seqBuffers = new Array;
 
-let originalTempo = 20;
+let originalTempo = 100;
 Tone.Transport.bpm.value = originalTempo;
 Tone.Transport.loopEnd.value = "8m";
 console.log(`bpm ${Math.round(Tone.Transport.bpm.value)}`);
-
 let slower;
 let faster;
 let save;
-
 let bpmShow = false;
-
 let bpmTextSize;
 let saveTextSize;
 let speedTextSize;
-
 let cnvDimension;
-
 let saveText;
-
 let inp;
-
 let myJSON;
+let index = 0;
 
 function preload() {
   seqOn = loadImage(`/images/bird_on.png`);
@@ -149,37 +141,34 @@ function welcomeScreen() {
   background(150); // background is grey (remember 5 is maximum because of the setup of colorMode)
   textSize(cnvDimension/10);
   textAlign(CENTER, CENTER);
-  text("Lazy Afternoons", width/2, height/10 * 2);
+  text("Bounce", width/2, height/10 * 2);
   textSize(cnvDimension/20);
-  text( "Garden Sequencer", width/10, height/10, (width/10) * 8, (height/10) * 8);
+  text( "Bounce Sequencer", width/10, height/10, (width/10) * 8, (height/10) * 8);
   text( "Touch screen or click mouse to start", width/2, height/10 * 7);
   text( "(...on iPhone side switch ON)", width/2, height/10 * 8);
 }
 
 function createButtonPositions() {
 
-  let step = (seqSteps/seqSteps);
-  let seqStepstart = width/(seqSteps*1.5);
-  let seqStepIncrement = width/(seqSteps + (step*0.5));
-  let seqStepDistance = seqStepstart;
+  let xDistance = (numberOfPlayers/numberOfPlayers);
+  let firstPlayerPosition = width/(numberOfPlayers*1.5);
+  let playerIncrement = width/(numberOfPlayers + (xDistance*0.5));
+  let playerDistance = firstPlayerPosition;
 
   for(let i = 0; i < seqRows; i++){
-    for(let j = 0; j < seqSteps; j++){
+    for(let j = 0; j < numberOfPlayers; j++){
       seqObject[`row${i}`].push({
-        x: seqStepDistance,
+        x: playerDistance,
         y: seqRowPosition,
-        state: 0,
-        image: seqOff
       });
-      seqStepDistance = seqStepDistance + seqStepIncrement;
+      playerDistance = playerDistance + playerIncrement;
     }
-    seqStepDistance = seqStepstart;
+    playerDistance = firstPlayerPosition;
     seqRowPosition = seqRowPosition + seqRowIncrement;
   }
-
 }
 
-function drawSynth(step) { // instead of using the draw function at 60 frames a second we will call this function when something changes
+function drawSynth() { // instead of using the draw function at 60 frames a second we will call this function when something changes
 
   if(save.status){
     background(156, 156, 184);
@@ -200,14 +189,23 @@ function drawSynth(step) { // instead of using the draw function at 60 frames a 
     imageMode(CENTER);
 
     for(let i = 0; i < seqRows; i++){
-      for(let j = 0; j < seqSteps; j++){
-        if((j === step) && (seqObject[`row${i}`][j].state === 0)){ // if this is the current step and the step is "off"
-          image(seqStep1, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then yellow seq for this step
-        }else if((j === step) && (seqObject[`row${i}`][j].state === 1)){ // if this is the current step and the step is "on"
-          image(seqStep2, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then purple seq for this step
-        }
-        else{
-          image(seqObject[`row${i}`][j].image, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // otherwise seq colour reflects step state
+      for(let j = 0; j < numberOfPlayers; j++){
+        if(playerOn[j] === 1){
+          if(seqSaveSteps[`row${i}`][j] === 0){ // if the step is "off"
+            if(i === _step[j]){ //and this is the current step
+              image(seqStep1, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then purple seq for this step
+            }else{
+              image(seqOff, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then black seq for this step
+            }
+          }else{ // if the step is "on"
+            if(i === _step[j]){ //and this is the current step
+              image(seqStep2, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then yellow seq for this step
+            }else{
+              image(seqOn, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then pink seq for this step
+            }
+          }
+        }else{
+          image(seqOff, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y, seqWidth, seqHeight); // then black seq for this step
         }
       }
     }
@@ -231,6 +229,89 @@ function drawSynth(step) { // instead of using the draw function at 60 frames a 
   }
   // myJSON = JSON.stringify(seqSaveSteps);
   // console.log(myJSON);
+}
+
+let _step = [];
+for(let i = 0; i < numberOfPlayers; i++) {
+  _step.push(0);
+}
+let bounceOffset = new Array;
+for(let i = 0; i < numberOfPlayers; i++) {
+  bounceOffset.push(0);
+}
+
+let down = [];
+for(let i = 0; i < numberOfPlayers; i++) {
+  down.push(1);
+}
+
+let playerOn = [];
+for(let i = 0; i < numberOfPlayers; i++) {
+  playerOn.push(0);
+}
+
+function repeat(time) {
+  for(let i = 0; i < numberOfPlayers; i++) {
+    if(down[i] === 1){
+      // console.log("in down");
+      if(_step[i] < seqRows-2){
+        // _step[i] += bounceOffset[i];
+        _step[i] ++;
+      }else{
+        //_step[i] = bounceOffset[i];
+        _step[i] ++;
+         down[i] = 0;
+      }
+    }else{
+      // console.log("in !down");
+      if(_step[i] > bounceOffset[i]+1){
+        _step[i] --;
+      }else{
+        _step[i] --;
+        down[i] = 1;
+      }
+    }
+  }
+
+
+  // for(let i = 0; i < numberOfPlayers; i++) {
+  //   _step[i] = index % (numberOfPlayers-bounceOffset[i]);
+  //   _step[i]+=bounceOffset[i];
+  // }
+
+  drawSynth(); //i'm here at the moment
+
+  // following to play audio
+  for(let i = 0; i < numberOfPlayers; i++) {
+    if((playerOn[i] === 1) && (_step[i] === seqRows-1)) {
+      console.log("boooooom");
+      seqPlayers[i].start();
+    }
+  }
+  // index++;
+  // console.log(_step);
+}
+
+function seqPressed(step, row) {
+
+  if(seqSaveSteps[`row${row}`][step] === 0) { // if the synth is not playing that note at the moment
+    for(let i = 0; i < numberOfPlayers; i++){
+      seqSaveSteps[`row${i}`][step] = 0;
+    }
+    seqSaveSteps[`row${row}`][step] = 1;// change the array to reflect that the note is playing
+    bounceOffset[step] = row;
+    _step[step] = row;
+    down[step] = 1;
+    playerOn[step] = 1;
+    drawSynth();
+  }
+  else { // if the synth is playing that note at the moment
+    seqSaveSteps[`row${row}`][step] = 0;// change the array to reflect that the note is playing
+    playerOn[step] = 0;
+    drawSynth();
+  }
+  console.log(`row${row} step ${step} = ${seqSaveSteps[`row${row}`][step]}`);
+  console.log(`playerOn ${playerOn}`);
 }
 
 function copySave() {
@@ -288,10 +369,10 @@ function handleClick(e){
       }
     }else{
       for(let i = 0; i < seqRows; i++){
-        for(let j = 0; j < seqSteps; j++){
+        for(let j = 0; j < numberOfPlayers; j++){
           let d = dist(mouseX, mouseY, seqObject[`row${i}`][j].x, seqObject[`row${i}`][j].y);
           if (d < seqHeight/2) {
-            seqPressed(i, j);
+            seqPressed(j, i);
           }
         }
       }
@@ -347,40 +428,10 @@ function handleClick(e){
   }
 }
 
-function seqPressed(row, step) {
-
-  if(seqObject[`row${row}`][step].state === 0) { // if the synth is not playing that note at the moment
-    seqObject[`row${row}`][step].image = seqOn;
-    drawSynth();
-    seqObject[`row${row}`][step].state = 1; // change the array to reflect that the note is playing
-  }
-  else { // if the synth is playing that note at the moment
-    seqObject[`row${row}`][step].image = seqOff;
-    drawSynth();
-    seqObject[`row${row}`][step].state = 0; // change the array to reflect that the note is playing
-  }
-  console.log(`row${row} step ${step} = ${seqObject[`row${row}`][step].state}`);
-
-
-}
-
 function setSpeed(tempo) {
   for(let i = 0; i < seqPlayers.length; i++){
     seqPlayers[i].playbackRate = tempo/originalTempo;
   }
-}
-
-let index = 0;
-
-function repeat(time) {
-  let _step = index % seqSteps;
-  drawSynth(_step)
-  for(let i = 0; i < seqRows; i++) {
-    if(seqObject[`row${i}`][_step].state === 1) {
-      seqPlayers[i].start();
-    }
-  }
-  index++;
 }
 
 function isMouseInsideText(text, textX, textY) {
@@ -399,27 +450,7 @@ function isMouseInsideText(text, textX, textY) {
 //document.URL is the current url
 var url_ob = new URL(document.URL);
 
-
-let seqSaveSteps = {};
-for(let i = 0; i < seqRows; i++){
-  seqSaveSteps[`row${i}`] = new Array ();
-}
-
-for(let i = 0; i < seqRows; i++){ // setup and initialise the array
-  for(let j = 0; j < seqSteps; j++){
-    seqSaveSteps[`row${i}`].push(0);
-  }
-}
-
-
 function saveSeq() {
-  for(let i = 0; i < seqRows; i++){
-    for(let j = 0; j < seqSteps; j++){
-      seqSaveSteps[`row${i}`][j] = seqObject[`row${i}`][j].state;
-    }
-
-  }
-
   let seqRowsArray = new Array;
   for(let i = 0; i < seqRows; i++){
     seqRowsArray[i] = seqSaveSteps[`row${i}`].join('');
@@ -462,7 +493,7 @@ console.log(`saved tempo  ${savedTempo}`);
 
 for(let i = 0; i < seqRows; i++){
   console.log(`am i here? seqRow ${i}`);
-  for(let j = seqSteps - 1; j >= 0 ; j--){
+  for(let j = numberOfPlayers - 1; j >= 0 ; j--){
     let a = [];
     console.log(`savedseqRow ${i} = ${savedseqRow[i]}`);
     if(savedseqRow[i].length > 0){
@@ -471,7 +502,7 @@ for(let i = 0; i < seqRows; i++){
       a[j] = 0;
       }
     if(a[j] === "1"){ // you need to put "" around the number because you are comparing a number with a string
-      seqPressed(i, j);
+      seqPressed(j, i);
     }
   }
 }
@@ -482,7 +513,6 @@ if(isNaN(savedTempo) === false){
   setSpeed(Tone.Transport.bpm.value);
   console.log(`saved bpm ${Math.round(Tone.Transport.bpm.value)}`);
   bpmShow = true;
-  //drawSynth();
   setTimeout(() => {
     bpmShow = false;
     faster.colour = 'rgba(255, 255, 255, 0.9)';
